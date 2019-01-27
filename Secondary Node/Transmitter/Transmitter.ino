@@ -8,6 +8,13 @@
 
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 
+int flexiForcePin1 = A0;   //analog pin 0
+int flexiForcePin2 = A1;   //analog pin 1
+
+#if defined(ARDUINO_SAMD_ZERO) && defined(SERIAL_PORT_USBVIRTUAL)
+  // Required for Serial on Zero based boards
+  #define Serial SERIAL_PORT_USBVIRTUAL
+#endif
 
 const byte rxAddr[6] = "00002";
 
@@ -34,8 +41,12 @@ void setup()
 
 void loop() 
 {
+  int flexiForceReading1 = analogRead(flexiForcePin1); 
+  int flexiForceReading2 = analogRead(flexiForcePin2); 
+
+
   struct send_data send_packet;
-  send_packet.ratio = ratio;
+  send_packet.ratio = 100*(flexiForceReading1)/(flexiForceReading1 + flexiForceReading2);
   sendPacket(send_packet);
 
   delay(10);
