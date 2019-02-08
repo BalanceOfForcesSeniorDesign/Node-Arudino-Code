@@ -24,9 +24,10 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 
 const byte rxAddr[6] = "00001";
 const byte Node1Addr[6] = "00002";
+const byte Node2Addr[6] = "00003";
 
 
-float ratio = 0;
+float ax,ay,az,gx,gy,gz,node1_ratio,node2_ratio;
 
 // i2c
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
@@ -43,7 +44,7 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 
 
 typedef struct send_data {
-  float ax,ay,az,gx,gy,gz,ratio;
+  float ax,ay,az,gx,gy,gz,node1_ratio,node2_ratio;
 };
 
 typedef struct recieve_data {
@@ -102,42 +103,50 @@ void setup()
 
   radio.openWritingPipe(rxAddr);
   radio.openReadingPipe(1, Node1Addr);
+  radio.openReadingPipe(2, Node2Addr);
   radio.setRetries(15, 15);
   radio.startListening();
 
   Serial.println("Finished setting up the RF chip.");
 }
 
+
 void loop() 
 {
-  lsm.read();  
-  /* Get a new sensor event */ 
-  sensors_event_t a, m, g, temp;
-  lsm.getEvent(&a, &m, &g, &temp); 
+
+  readIMUData();
 
   struct send_data send_packet;
-  send_packet.ax = a.acceleration.x;
-  send_packet.ay = a.acceleration.y;
-  send_packet.az = a.acceleration.z;
-  send_packet.gx = g.gyro.x;
-  send_packet.gy = g.gyro.y;
-  send_packet.gz = g.gyro.z;
-  send_packet.ratio = ratio;
+  send_packet.ax = ax;
+  send_packet.ay = ay;
+  send_packet.az = az;
+  send_packet.gx = gx;
+  send_packet.gy = gy;
+  send_packet.gz = gz;
+  send_packet.node1_ratio = node1_ratio;
+  send_packet.node2_ratio = node2_ratio;
 
   
   sendPacket(send_packet);
 
-  //delay(10);
+  delay(1);
   
-  strip.setPixelColor(0,(int)abs(g.gyro.x),(int)abs(g.gyro.y),(int)abs(g.gyro.z));
+  strip.setPixelColor(0,(int)abs(gx),(int)abs(gy),(int)abs(gz));
   strip.show();
   
-  struct recieve_data recieve_packet;
-  recieve_packet = recievePacket();
-  ratio = recieve_packet.ratio;
+  struct recieve_data packet1,packet2;
+  
+  packet1 = recievePacket(Node1Addr);
+  packet2 = recievePacket(Node2Addr);
+  delay(1);
+  
+  node1_ratio = packet1.ratio;
+  node2_ratio = packet2.ratio;
+
+
+  
 
 }
-
 
 void sendPacket(struct send_data packet)
 {
@@ -156,10 +165,10 @@ void sendPacket(struct send_data packet)
         
  }
 
-struct recieve_data recievePacket()
+recieve_data recievePacket(uint8_t pipe_number)
  {
  // Serial.println("Looking for Data...");
-  if (radio.available())
+  if (radio.available(&pipe_number))
   {
    struct recieve_data packet;
    radio.read(&packet, sizeof(packet));
@@ -169,5 +178,21 @@ struct recieve_data recievePacket()
    
   }
  }
+
+ void readIMUData()
+ {
+ lsm.read();  
+  /* Get a new sensor event */ 
+  sensors_event_t a, m, g, temp;
+  lsm.getEvent(&a, &m, &g, &temp); 
+
+  ax = a.acceleration.x;
+  ay = a.acceleration.y;
+  az = a.acceleration.z;
+  gx = g.gyro.x;
+  gy = g.gyro.y;
+  gz = g.gyro.z;
+ }
+ 
  
  
