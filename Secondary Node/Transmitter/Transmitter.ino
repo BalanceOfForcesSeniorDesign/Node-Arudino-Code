@@ -2,8 +2,8 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <SPI.h>
-#define CSN_PIN 10
-#define CE_PIN 11
+#define CSN_PIN 11
+#define CE_PIN 10
 
 
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
@@ -41,19 +41,16 @@ void setup()
 
 void loop() 
 {
-  float flexiForceReading1 = analogRead(flexiForcePin1); 
-  float flexiForceReading2 = analogRead(flexiForcePin2); 
-
-  Serial.print(flexiForceReading1);
-  Serial.print(flexiForceReading2);
+  int flexiForceReading1 = analogRead(flexiForcePin1); 
+  int flexiForceReading2 = analogRead(flexiForcePin2); 
 
 
   struct send_data send_packet;
-  ratio =  (flexiForceReading1)-(flexiForceReading2);
-  send_packet.ratio = ratio;
+  send_packet.ratio = 100*(flexiForceReading1)/(flexiForceReading1 + flexiForceReading2);
   sendPacket(send_packet);
 
   delay(10);
+  ratio += 1;
   Serial.println(ratio);
   
 }
