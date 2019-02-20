@@ -6,6 +6,7 @@
 #include <Adafruit_LSM9DS1.h>
 #include <Adafruit_Sensor.h>  // not used in this demo but required!
 #include <nRF24L01.h>
+#include <NodeConfig.h>
 #include "Plotter.h"
 RF24 radio(7, 8);
 
@@ -19,13 +20,13 @@ float acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,mag_x,mag_y,mag_z,node1_diff,node2_
 
 // Also declare plotter as global
 //Plotter p;
-const byte rxAddr[6] = "00001";
+
 
 void setup() 
 {
     Serial.begin(115200);
     radio.begin();
-    radio.openReadingPipe(0, rxAddr);
+    radio.openReadingPipe(0, RX_PC_ADR);
     radio.startListening();
 
 

@@ -6,6 +6,7 @@
 #include <Adafruit_LSM9DS1.h>
 #include <Adafruit_Sensor.h>  // not used in this demo but required!
 #include <nRF24L01.h>
+#include <NodeConfig.h>
 #include "Plotter.h"
 RF24 radio(7, 8);
 
@@ -17,14 +18,14 @@ float acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,mag_x,mag_y,mag_z,ratio;
 
 // Also declare plotter as global
 Plotter p;
-const byte rxAddr[6] = "00001";
+
 
 void setup()
 {
     // Start plotter
     p.Begin();
     radio.begin();
-    radio.openReadingPipe(0, rxAddr);
+    radio.openReadingPipe(0, RX_PC_ADR);
     radio.startListening();
   
     p.AddTimeGraph( "Acceleration X", 1000, "m/s^2", acc_x );
