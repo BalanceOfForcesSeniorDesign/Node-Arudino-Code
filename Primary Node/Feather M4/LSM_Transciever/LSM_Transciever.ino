@@ -145,10 +145,10 @@ void sendPacket(struct send_data packet)
  radio.stopListening();
  rslt = radio.write(&packet, sizeof(packet));
  radio.startListening();
- //Serial.print("Data Sent ");
+ Serial.print("Data Sent ");
  if (rslt) {
   digitalWrite(13, HIGH);   // turn the LED on (HIGH is the voltage level)
-// Serial.println("  Acknowledge received");
+ Serial.println("  Acknowledge received");
  } else {
        //  Serial.println("  Tx failed");
          digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
@@ -158,13 +158,13 @@ void sendPacket(struct send_data packet)
 
 struct recieve_data recievePacket()
  {
- // Serial.println("Looking for Data...");
+  Serial.println("Looking for Data...");
   if (radio.available())
   {
    struct recieve_data packet;
    radio.read(&packet, sizeof(packet));
-  // Serial.print("Recieved packet! : ");
- //  Serial.println(packet.ratio);
+   Serial.print("Recieved packet! : ");
+   Serial.println(packet.ratio);
    return packet;
    
   }
