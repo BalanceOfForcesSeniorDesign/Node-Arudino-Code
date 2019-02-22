@@ -6,6 +6,7 @@
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>
 #include <NodeConfig.h>
+#include <RF24Network.h>
 
 #define PIN 8
   // Parameter 1 = number of pixels in strip
@@ -20,9 +21,19 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(1, PIN, NEO_GRB + NEO_KHZ800);
 #define CSN_PIN 11
 #define CE_PIN 10
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
+RF24Network network(radio);  
 
 
-float ratio = 0;
+const uint16_t this_node = 00;        // Address of our node in Octal format
+const uint16_t node_A = 01;
+const uint16_t node_B = 02;
+const uint16_t node_PC = 04;
+
+unsigned long last_sent;             // When did we last send?
+unsigned long packets_sent;          // How many have we sent already
+
+float nodeAdiff,nodeBdiff;
+uint8_t recieve_pipe_num;
 
 // i2c
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
@@ -39,11 +50,11 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 
 
 typedef struct send_data {
-  float ax,ay,az,gx,gy,gz,ratio;
+  float ax,ay,az,gx,gy,gz,nodeAdiff,nodeBdiff;
 };
 
 typedef struct recieve_data {
-  float ratio;
+  float diff;
 };
 
 
@@ -91,22 +102,27 @@ void setup()
   pinMode(13, OUTPUT);
 
   Serial.println("Setup NeoPixel");
-
+  
+  SPI.begin();
+  radio.begin();
+  network.begin(/*channel*/ 90, /*node address*/ this_node);
 
   
-  radio.begin();
-
-  radio.openWritingPipe(RX_PC_ADR);
-  radio.openReadingPipe(1, NODE_ADR[0]);
-  radio.openReadingPipe(2, NODE_ADR[1]);
-  radio.setRetries(15, 15);
-  radio.startListening();
+  //radio.begin();
+  //radio.setPALevel(RF24_PA_MAX);
+  //radio.openWritingPipe(RX_PC_ADR);
+  //radio.openReadingPipe(1, NODE_ADR[0]);
+  //radio.openReadingPipe(2, NODE_ADR[1]);
+  //radio.setRetries(15, 15);
+  //radio.startListening();
 
   Serial.println("Finished setting up the RF chip.");
 }
 
 void loop() 
 {
+    network.update(); 
+    
   lsm.read();  
   /* Get a new sensor event */ 
   sensors_event_t a, m, g, temp;
@@ -119,19 +135,54 @@ void loop()
   send_packet.gx = g.gyro.x;
   send_packet.gy = g.gyro.y;
   send_packet.gz = g.gyro.z;
-  send_packet.ratio = ratio;
+  send_packet.nodeAdiff = nodeAdiff;
+  send_packet.nodeBdiff = nodeBdiff;
+
+
+  unsigned long now = millis(); 
+ last_sent = now;
+    Serial.print("Sending...");
+    RF24NetworkHeader header(/*to node*/ node_PC);
+    bool ok = network.write(header,&send_packet,sizeof(send_packet));
+    if (ok)
+      Serial.println("ok.");
+    else
+      Serial.println("failed.");
+
+
+
+
+while(network.available()){
+RF24NetworkHeader header;
+
 
   
-  sendPacket(send_packet);
+}
+  
+ // sendPacket(send_packet);
 
   //delay(10);
   
   strip.setPixelColor(0,(int)abs(g.gyro.x),(int)abs(g.gyro.y),(int)abs(g.gyro.z));
   strip.show();
+
+
+
+
+
   
-  struct recieve_data recieve_packet;
-  recieve_packet = recievePacket();
-  ratio = recieve_packet.ratio;
+  
+  //struct recieve_data recieve_packet;
+  //recieve_packet = recievePacket();
+  //if (recieve_pipe_num == 1)
+  //{
+   // nodeAdiff = recieve_packet.diff;
+ // }
+ // else
+  //{
+   // nodeBdiff = recieve_packet.diff;
+ // }
+  
 
 }
 
@@ -156,12 +207,14 @@ void sendPacket(struct send_data packet)
 struct recieve_data recievePacket()
  {
   Serial.println("Looking for Data...");
-  if (radio.available())
+  while (radio.available(&recieve_pipe_num))
   {
    struct recieve_data packet;
    radio.read(&packet, sizeof(packet));
-   Serial.print("Recieved packet! : ");
-   Serial.println(packet.ratio);
+   Serial.print("Recieved packet! from  ");
+   Serial.print(recieve_pipe_num);
+   Serial.print(" : ");
+   Serial.println(packet.diff);
    return packet;
    
   }
