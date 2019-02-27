@@ -1,12 +1,13 @@
 #include <RF24Network.h>
 #include <RF24.h>
 #include <SPI.h>
+#include <NodeConfig.h>
 
 
 RF24 radio(7,8);                // nRF24L01(+) radio attached using Getting Started board 
 
 RF24Network network(radio);      // Network uses that radio
-const uint16_t node_P = 00;    // Address of our node in Octal format ( 04,031, etc)
+
 
 unsigned long time;
 
@@ -21,6 +22,8 @@ void setup(void)
   Serial.begin(115200);
   SPI.begin();
   radio.begin();
+      radio.setPALevel(RF24_PA_MAX);       //PA level to output
+  radio.setDataRate(RF24_2MBPS);         //Set data rate as specified in user options
   network.begin(node_P);
 }
 
