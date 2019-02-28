@@ -18,10 +18,14 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(1, PIN, NEO_GRB + NEO_KHZ800);
 #define CE_PIN 10
 RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 
-float ax,ay,az,gx,gy,gz,nodeA_diff,nodeB_diff;
 
-struct payload_t {                 // Structure of our payload
-  float ax,ay,az,gx,gy,gz,nodeA_diff,nodeB_diff;
+
+
+float ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff;
+
+// Payload structure
+struct payload_t {                 
+  float ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff;
 };
 
 
@@ -32,7 +36,7 @@ void setupSensor()
   //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_4G);
   //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_8G);
   //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_16G);
-  
+
   // 2.) Set the magnetometer sensitivity
   lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
   //lsm.setupMag(lsm.LSM9DS1_MAGGAIN_8GAUSS);
@@ -52,11 +56,11 @@ void setup(void)
 
   lsm.begin();
   setupSensor();
-  
+
   strip.begin();
   strip.setBrightness(64);
   strip.show();
-  
+
   pinMode(13, OUTPUT);
   setupRadio(radio);
   radio.stopListening(); // Needed for a write only operation
@@ -64,69 +68,50 @@ void setup(void)
 
 void loop(void) {
 
-  unsigned long now = millis();
-  
-  if (now % 1 == 0)
-  {
-  lsm.read();  
-  /* Get a new sensor event */ 
-  sensors_event_t a, m, g, temp;
-  lsm.getEvent(&a, &m, &g, &temp); 
-
-
-  ax = a.acceleration.x;
-  ay = a.acceleration.y;
-  az = a.acceleration.z;
-  gx = g.gyro.x;
-  gy = g.gyro.y;
-  gz = g.gyro.z;
-
-  strip.setPixelColor(0,(int)abs(gx),(int)abs(gy),(int)abs(gz));
-  strip.show();
-  }
 
   
-  if (now % 2 == 0)
-  {
+
+    // Read IMU data
+    lsm.read();
+    sensors_event_t a, m, g, temp;
+    lsm.getEvent(&a, &m, &g, &temp);
+
+    ax = a.acceleration.x;
+    ay = a.acceleration.y;
+    az = a.acceleration.z;
+    gx = g.gyro.x;
+    gy = g.gyro.y;
+    gz = g.gyro.z;
+
+    strip.setPixelColor(0, (int)abs(gx), (int)abs(gy), (int)abs(gz));
+    strip.show();
+
+
     byte sendByte;
-    openRadioToNode(1, radio); // Switch to ping Node A
-    if (radio.write(&sendByte, 1)) {
-      if (radio.isAckPayloadAvailable())
-      {
-        radio.read(&nodeA_diff, sizeof(nodeA_diff));
-      }
-      
-      digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
 
-    } else {
+    // Ping Node A
+    openRadioToNode(1, radio);
+    if (radio.write(&sendByte, 1)) {
+      if (radio.isAckPayloadAvailable()) radio.read(&nodeA_diff, sizeof(nodeA_diff));
+    }
+    
+    // Ping Node B
+    openRadioToNode(2, radio); 
+    if (radio.write(&sendByte, 1)) {
+      if (radio.isAckPayloadAvailable()) radio.read(&nodeB_diff, sizeof(nodeB_diff));
+    }
+
+    // Send message to PC reciever
+    Serial.println("Sending message....");
+    openRadioToNode(3, radio); // Switch to transmit to the PC node
+    payload_t packet = {ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff};
+    if (radio.write(&packet, sizeof(packet)))
+    {
+      digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
+    }
+    else
+    {
       digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
     }
-    openRadioToNode(2, radio); // Switch to ping Node B
-    if (radio.write(&sendByte, 1)) {
-      if (radio.isAckPayloadAvailable())
-      {
-        radio.read(&nodeB_diff, sizeof(nodeB_diff));
-      }
-      
-      digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
 
-    } else {
-      digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
-    }
-    Serial.print(ax);
-    Serial.print(",");
-    Serial.print(ay);
-    Serial.print(",");
-    Serial.print(az);
-    Serial.print(",");
-    Serial.print(gx);
-    Serial.print(",");
-    Serial.print(gy);
-    Serial.print(",");
-    Serial.print(gz);
-    Serial.print(",");
-    Serial.print(nodeA_diff);
-    Serial.print(",");
-    Serial.println(nodeB_diff);
-  }
 }

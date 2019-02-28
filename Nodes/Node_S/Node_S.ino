@@ -1,12 +1,10 @@
-#include <RF24Network.h>
 #include <RF24.h>
-#include <SPI.h>
-#include <NodeConfig.h>
+#include <RadioConfig.h>
 
+#define CSN_PIN 7
+#define CE_PIN 8
+RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 
-RF24 radio(7,8);                // nRF24L01(+) radio attached using Getting Started board 
-
-RF24Network network(radio);      // Network uses that radio
 
 
 unsigned long time;
@@ -17,26 +15,21 @@ struct payload_t {                 // Structure of our payload
 
 float acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,nodeA_diff,nodeB_diff;
 
+unsigned long current_time;
 void setup(void)
 {
   Serial.begin(115200);
-  SPI.begin();
-  radio.begin();
-      radio.setPALevel(RF24_PA_MAX);       //PA level to output
-  radio.setDataRate(RF24_2MBPS);         //Set data rate as specified in user options
-  network.begin(node_P);
+  setupAckRadio(3, radio);
 }
 
 void loop(void){
   
-  network.update();                  // Check the network regularly
   time = millis();
   
-  while ( network.available() ) {     // Is there anything ready for us?
-    
-    RF24NetworkHeader header;        // If so, grab it and print it out
+  while ( radio.available() ) {     // Is there anything ready for us?
     payload_t payload;
-    network.read(header,&payload,sizeof(payload));
+    radio.read(&payload,sizeof(payload));
+    
     acc_x = payload.ax;
     acc_y = payload.ay;
     acc_z = payload.az;
@@ -45,6 +38,7 @@ void loop(void){
     gyro_z = payload.gz;
     nodeA_diff = payload.nodeA_diff;
     nodeB_diff = payload.nodeB_diff;
+
 
   }
 

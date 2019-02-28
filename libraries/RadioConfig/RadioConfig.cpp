@@ -10,7 +10,7 @@ void setupRadio(RF24 radio)
   radio.setDataRate(RF24_2MBPS);         //Set data rate as specified in user options
   radio.setAutoAck(1);                    // Ensure autoACK is enabled
   radio.enableAckPayload();               // Allow optional ack payloads
-  radio.setRetries(15,15);                 // Smallest time between retries, max no. of retries
+  radio.setRetries(0,15);                 // Smallest time between retries, max no. of retries
   radio.enableDynamicPayloads();
   radio.printDetails();                   // Dump the configuration of the rf unit for debugging
 
@@ -28,6 +28,10 @@ void setupAckRadio(uint8_t node, RF24 radio)
   {
     radio.openReadingPipe(1,addresses[2]);
   }
+  else if (node == 3)
+  {
+    radio.openReadingPipe(1,addresses[3]);
+  }
   radio.startListening();
 }
 
@@ -42,6 +46,10 @@ void openRadioToNode(uint8_t node,RF24 radio)
   else if (node == 2)
   {
    radio.openWritingPipe(addresses[2]);
+  }
+  else if (node == 3)
+  {
+   radio.openWritingPipe(addresses[3]);
   }
 
 }

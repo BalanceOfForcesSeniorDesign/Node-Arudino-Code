@@ -1,6 +1,6 @@
 #include <RF24.h>
 #include <RadioConfig.h>
-#include <printf.h>
+
 
 #define CSN_PIN 10
 #define CE_PIN 11
@@ -15,7 +15,6 @@ float diff = 0;
 void setup(void)
 {
   Serial.begin(115200);
-  printf_begin();
   pinMode(13, OUTPUT);
   setupAckRadio(2, radio);
 }
