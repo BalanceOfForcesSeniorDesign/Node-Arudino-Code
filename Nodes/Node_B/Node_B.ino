@@ -10,7 +10,7 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 int flexiForcePin1 = A0;   //analog pin 0
 int flexiForcePin2 = A2;   //analog pin 1
 
-float diff = 0;
+int diff = 0;
 
 void setup(void)
 {
@@ -23,8 +23,8 @@ void loop() {
 
   while(!radio.available())
 {
-  float flexiForceReading1 = analogRead(flexiForcePin1);
-  float flexiForceReading2 = analogRead(flexiForcePin2);
+  int flexiForceReading1 = analogRead(flexiForcePin1);
+  int flexiForceReading2 = analogRead(flexiForcePin2);
   diff =  (flexiForceReading1) - (flexiForceReading2);
   digitalWrite(13, LOW);    // turn the LED off by making the voltage HIGH
 }
