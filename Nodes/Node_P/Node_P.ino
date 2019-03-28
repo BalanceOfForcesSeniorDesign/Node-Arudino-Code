@@ -23,7 +23,7 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 byte sendByte;
 
 // Timing
-#define DATA_ACQ_INTERVAL_US 10000 // us
+#define DATA_ACQ_INTERVAL_US 4000 // us
 #define PC_TX_INTERVAL_US 2000 // us
 int lastDataAcqInterval;
 int currentTime;
@@ -36,7 +36,11 @@ int pressureSamples[SAMPLES];
 double vPressureReal[SAMPLES];
 double vPressureImag[SAMPLES];
 
-arduinoFFT PressureFFT = arduinoFFT(vPressureReal,vPressureImag,SAMPLES,SAMPLING_FREQUENCY); 
+bool interpolatedSample = false;
+int numSamplesCollected = 0;
+double interpolatedSlope;
+
+arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 
 // Sensor global variables
@@ -46,7 +50,7 @@ int nodeA_diff, nodeB_diff;
 
 
 // Payload structure
-struct payload_t {                 
+struct payload_t {
   float ax, ay, az, gx, gy, gz;
   int nodeA_diff, nodeB_diff;
 };
@@ -94,86 +98,107 @@ void setup(void)
 void loop(void) {
 
 
-  
-    currentTime = micros();
 
-    if (currentTime-lastDataAcqInterval >= DATA_ACQ_INTERVAL_US)
+  currentTime = micros();
+
+
+  if ((currentTime - lastDataAcqInterval) >= DATA_ACQ_INTERVAL_US)
+  {
+    if ((currentTime - lastDataAcqInterval - DATA_ACQ_INTERVAL_US) < 500)
     {
       lastDataAcqInterval = currentTime;
-        
+      
       // Read IMU data
       lsm.read();
       lsm.getEvent(&a, &m, &g, &temp);
-  
+
       // Ping Node A
       openRadioToNode(1, radio);
       if (radio.write(&sendByte, 1)) {
         if (radio.isAckPayloadAvailable()) radio.read(&nodeA_diff, sizeof(nodeA_diff));
       }
-      
+
       // Ping Node B
-      openRadioToNode(2, radio); 
+      openRadioToNode(2, radio);
       if (radio.write(&sendByte, 1)) {
         if (radio.isAckPayloadAvailable()) radio.read(&nodeB_diff, sizeof(nodeB_diff));
       }
 
-      for (int i = SAMPLES-1;i>0;i--)
+      // Push into sample array
+      for (int i = 0; i < SAMPLES - 1; i++)
       {
-        pressureSamples[i] = pressureSamples[i-1];
+        pressureSamples[i] = pressureSamples[i + 1];
       }
-      pressureSamples[0] = (nodeA_diff + nodeB_diff);
-
-
-      for (int i= 0; i <= SAMPLES-1;i++)
-      {
-        vPressureReal[i] = pressureSamples[i];
-        vPressureImag[i] = 0;
-      }
-
-      int t = micros();
-      PressureFFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-      PressureFFT.Compute(FFT_FORWARD);
-      PressureFFT.ComplexToMagnitude();
-      double domFrequency = PressureFFT.MajorPeak();
-      Serial.println(domFrequency);
-      /*for(int i=1; i<(SAMPLES/2); i++)
-      {
-                  
-          Serial.print((i * 1.0 * SAMPLING_FREQUENCY) / SAMPLES, 1);
-          Serial.print(" ");
-          Serial.println(vPressureReal[i], 1);    //View only this line in serial plotter to visualize the bins
-      }*/
-
+      
+      pressureSamples[SAMPLES - 1] = (nodeA_diff + nodeB_diff);
+      interpolatedSample = false;
+      numSamplesCollected++;
     }
+    else if (!interpolatedSample)
+    {
+      lastDataAcqInterval = currentTime;
+      
+      // Push into sample array
+      for (int i = 0; i < SAMPLES - 1; i++)
+      {
+        pressureSamples[i] = pressureSamples[i + 1];
+      }
 
-    
+      // Interpolate next sample using the last 2 samples
+      interpolatedSlope = (pressureSamples[SAMPLES - 2] - pressureSamples[SAMPLES - 4])/8;
+      pressureSamples[SAMPLES - 1] = (int) pressureSamples[SAMPLES - 2] + interpolatedSlope * 4;
+      interpolatedSample = true;
+    }
+  }
 
   
-    // Send message to PC reciever
-    /*Serial.println("Sending message....");
+
+  if (numSamplesCollected  >= 4)
+  {
+
+    for (int i = 0; i <= SAMPLES - 1; i++)
+    {
+      vPressureReal[i] = pressureSamples[i];
+      vPressureImag[i] = 0;
+    }
+
+    int t = micros();
+    PressureFFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+    PressureFFT.Compute(FFT_FORWARD);
+    PressureFFT.ComplexToMagnitude();
+    double domFrequency = PressureFFT.MajorPeak();
+    Serial.println(domFrequency);
+    numSamplesCollected  = 0;
+  }
+
+
+
+
+  // Send message to PC reciever
+  /*Serial.println("Sending message....");
     openRadioToNode(3, radio); // Switch to transmit to the PC node
     payload_t packet = {ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff};
     if (radio.write(&packet, sizeof(packet)))
     {
-      digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
+    digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
     }
     else
     {
-      digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
+    digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
     }*/
 
-/*
-    ax = a.acceleration.x;
-    ay = a.acceleration.y;
-    az = a.acceleration.z;
-    gx = g.gyro.x;
-    gy = g.gyro.y;
-    gz = g.gyro.z;
+  /*
+      ax = a.acceleration.x;
+      ay = a.acceleration.y;
+      az = a.acceleration.z;
+      gx = g.gyro.x;
+      gy = g.gyro.y;
+      gz = g.gyro.z;
 
-    strip.setPixelColor(0, (int)abs(gx), (int)abs(gy), (int)abs(gz));
-    strip.show();
-*/
-    
+      strip.setPixelColor(0, (int)abs(gx), (int)abs(gy), (int)abs(gz));
+      strip.show();
+  */
+
 
 
 
