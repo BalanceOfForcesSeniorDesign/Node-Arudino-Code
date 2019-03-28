@@ -23,14 +23,15 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 byte sendByte;
 
 // Timing
-#define DATA_ACQ_INTERVAL_US 4000 // us
-#define PC_TX_INTERVAL_US 2000 // us
+#define DATA_ACQ_INTERVAL_US 4000 // us = 4ms
+#define PC_TX_INTERVAL_US 2000 // us = 2ms
+
 int lastDataAcqInterval;
 int currentTime;
 
 // Sampling and FFT
 #define SAMPLES 128 // 128 * 4ms = .512 s
-#define SAMPLING_FREQUENCY 100 // 1/4ms = 250 Hz
+#define SAMPLING_FREQUENCY 250 // 1/4ms = 250 Hz
 
 int pressureSamples[SAMPLES];
 double vPressureReal[SAMPLES];
