@@ -150,6 +150,7 @@ void loop(void) {
       pressureSamples[SAMPLES - 1] = (int) pressureSamples[SAMPLES - 2] + interpolatedSlope * 4;
       interpolatedSample = true;
     }
+    Serial.println(g.gyro.x);
   }
 
   
@@ -168,7 +169,7 @@ void loop(void) {
     PressureFFT.Compute(FFT_FORWARD);
     PressureFFT.ComplexToMagnitude();
     double domFrequency = PressureFFT.MajorPeak();
-    Serial.println(domFrequency);
+    //Serial.println(domFrequency);
     numSamplesCollected  = 0;
   }
 
