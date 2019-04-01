@@ -36,9 +36,9 @@ void loop() {
   lowpassFilter2.input(analogRead(flexiForcePin2));
   diff =  (lowpassFilter1.output()) - (lowpassFilter2.output());
   digitalWrite(13, LOW);    // turn the LED off by making the voltage HIGH
-  //Serial.println(diff);
+  Serial.println(diff);
 }
-    Serial.println("Pinged for voltage difference");
+    //Serial.println("Pinged for voltage difference");
     radio.writeAckPayload(1, &diff, sizeof(diff)); // Send back the ratio
     byte gotByte;
     radio.read(&gotByte, 1); // Recieve the packet

@@ -34,6 +34,9 @@ int currentTime;
 #define SAMPLING_FREQUENCY 250 // 1/4ms = 250 Hz
 
 int pressureSamples[SAMPLES];
+float gyroscopeSamples[SAMPLES];
+float accelerometerSamples{SAMPLES];
+
 double vPressureReal[SAMPLES];
 double vPressureImag[SAMPLES];
 
@@ -150,7 +153,7 @@ void loop(void) {
       pressureSamples[SAMPLES - 1] = (int) pressureSamples[SAMPLES - 2] + interpolatedSlope * 4;
       interpolatedSample = true;
     }
-    Serial.println(g.gyro.x);
+    //Serial.println( pressureSamples[SAMPLES - 1]);
   }
 
   
@@ -169,7 +172,9 @@ void loop(void) {
     PressureFFT.Compute(FFT_FORWARD);
     PressureFFT.ComplexToMagnitude();
     double domFrequency = PressureFFT.MajorPeak();
-    //Serial.println(domFrequency);
+    if (domFrequency > .27 && domFrequency < 5) Serial.println(domFrequency);
+
+    
     numSamplesCollected  = 0;
   }
 
