@@ -228,10 +228,9 @@ currentTime = micros();
       presentState = 0; // User is not walking
     }
     numSamplesCollected  = 0;
-
-
+    /******************************Previous State Definition*************************************/
+    previousState = presentState;  
   }
-
 }
 
 
@@ -297,7 +296,4 @@ void detectImbalance()
 //    Serial.print(accelerometerZSamples);
 //    Serial.print(" ");
 //    Serial.print(imbalance);
-    /******************************Previous State Definition*************************************/
-    previousState = presentState;  
-  
 }
