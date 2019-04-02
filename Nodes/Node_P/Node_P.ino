@@ -23,10 +23,10 @@ RF24 radio(CE_PIN, CSN_PIN); // CE, CSN
 byte sendByte;
 
 // Timing
-#define DATA_ACQ_INTERVAL_US 4000 // us = 4ms
-#define PC_TX_INTERVAL_US 2000 // us = 2ms
+#define DATA_ACQ_INTERVALS_US 4000 // us = 4ms
+#define PC_TX_INTERVALS_US 2000 // us = 2ms
 
-int lastDataAcqInterval;
+int lastDataAcqINTERVALS;
 int currentTime;
 
 // Sampling and FFT
@@ -34,8 +34,8 @@ int currentTime;
 #define SAMPLING_FREQUENCY 250 // 1/4ms = 250 Hz
 
 int pressureSamples[SAMPLES];
-float gyroscopeSamples[SAMPLES];
-float accelerometerSamples{SAMPLES];
+float gyroscopeYSamples[SAMPLES];
+float accelerometerZSamples[SAMPLES];
 
 double vPressureReal[SAMPLES];
 double vPressureImag[SAMPLES];
@@ -45,6 +45,27 @@ int numSamplesCollected = 0;
 double interpolatedSlope;
 
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
+
+// Walking Detection
+#define DOMINATING_FREQUENCY_FLOOR .27; // Hz
+#define DOMINATING_FREQUENCY_CEILING 5; // Hz
+
+// Imbalance Detection
+#define FORWARD_THRESHOLD 50;
+#define BACKWARD_THRESHOLD -50;
+#define ACCELEROMETER_Z_THRESHOLD 4;
+#define GYROSCOPE_Y_THRESHOLD 12;
+
+
+#define INTERVALS 2;
+int presentIntervals;
+int previousIntervals;
+int forwardCount;
+int backwardCount;
+int state[INTERVALS]; //State of walking or standing (0 or 1)
+int change[INTERVALS]; //Change from one state to another (-1 .. 2)
+int lean[INTERVALS]; // Direction of lean (-1..1)
+int imbalance[INTERVALS]; //Imbalance decision (0 or 1)
 
 
 // Sensor global variables
@@ -58,6 +79,8 @@ struct payload_t {
   float ax, ay, az, gx, gy, gz;
   int nodeA_diff, nodeB_diff;
 };
+
+
 
 
 void setupSensor()
@@ -103,14 +126,14 @@ void loop(void) {
 
 
 
-  currentTime = micros();
+currentTime = micros();
 
-
-  if ((currentTime - lastDataAcqInterval) >= DATA_ACQ_INTERVAL_US)
+/******************************Data Acquisition INTERVALS*************************************/
+  if ((currentTime - lastDataAcqINTERVALS) >= DATA_ACQ_INTERVALS_US)
   {
-    if ((currentTime - lastDataAcqInterval - DATA_ACQ_INTERVAL_US) < 500)
+    if ((currentTime - lastDataAcqINTERVALS - DATA_ACQ_INTERVALS_US) < 500)
     {
-      lastDataAcqInterval = currentTime;
+      lastDataAcqINTERVALS = currentTime;
       
       // Read IMU data
       lsm.read();
@@ -128,19 +151,34 @@ void loop(void) {
         if (radio.isAckPayloadAvailable()) radio.read(&nodeB_diff, sizeof(nodeB_diff));
       }
 
-      // Push into sample array
+      // Push into pressure sample array
       for (int i = 0; i < SAMPLES - 1; i++)
       {
         pressureSamples[i] = pressureSamples[i + 1];
       }
-      
       pressureSamples[SAMPLES - 1] = (nodeA_diff + nodeB_diff);
+
+      // Push into gyroscope Y sample array
+      for (int i = 0; i < SAMPLES - 1; i++)
+      {
+        gyroscopeYSamples[i] = gyroscopeYSamples[i + 1];
+      }
+      gyroscopeYSamples[SAMPLES - 1] = g.gyro.y;
+
+      // Push into accelerometer Z sample array
+      for (int i = 0; i < SAMPLES - 1; i++)
+      {
+        accelerometerZSamples[i] = accelerometerZSamples[i + 1];
+      }
+      accelerometerZSamples[SAMPLES - 1] = a.acceleration.z;
+
+
       interpolatedSample = false;
       numSamplesCollected++;
     }
     else if (!interpolatedSample)
     {
-      lastDataAcqInterval = currentTime;
+      lastDataAcqINTERVALS = currentTime;
       
       // Push into sample array
       for (int i = 0; i < SAMPLES - 1; i++)
@@ -149,15 +187,25 @@ void loop(void) {
       }
 
       // Interpolate next sample using the last 2 samples
+
+      // Interpolate the pressure sample
       interpolatedSlope = (pressureSamples[SAMPLES - 2] - pressureSamples[SAMPLES - 4])/8;
       pressureSamples[SAMPLES - 1] = (int) pressureSamples[SAMPLES - 2] + interpolatedSlope * 4;
+
+      // Interpolate the next gyroscope sample
+      interpolatedSlope = (gyroscopeYSamples[SAMPLES - 2] - gyroscopeYSamples[SAMPLES - 4])/8;
+      gyroscopeYSamples[SAMPLES - 1] = (float) gyroscopeYSamples[SAMPLES - 2] + interpolatedSlope * 4;
+
+      // Interpolate the next accelerometer sample
+      interpolatedSlope = (accelerometerZSamples[SAMPLES - 2] - accelerometerZSamples[SAMPLES - 4])/8;
+      accelerometerZSamples[SAMPLES - 1] = (float) accelerometerZSamples[SAMPLES - 2] + interpolatedSlope * 4;
+
       interpolatedSample = true;
     }
-    //Serial.println( pressureSamples[SAMPLES - 1]);
   }
 
   
-
+/******************************Take the FFT every defined number samples*************************************/
   if (numSamplesCollected  >= 4)
   {
 
@@ -171,42 +219,97 @@ void loop(void) {
     PressureFFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
     PressureFFT.Compute(FFT_FORWARD);
     PressureFFT.ComplexToMagnitude();
-    double domFrequency = PressureFFT.MajorPeak();
-    if (domFrequency > .27 && domFrequency < 5) Serial.println(domFrequency);
 
-    
+    // Computing the dominating frequency and if it is not defined as walking then detect imbalance
+    double domFrequency = PressureFFT.MajorPeak();
+    if (!(domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING)) detectImbalance();
     numSamplesCollected  = 0;
+
+
   }
 
+}
 
 
+void detectImbalance()
+{
 
-  // Send message to PC reciever
-  /*Serial.println("Sending message....");
-    openRadioToNode(3, radio); // Switch to transmit to the PC node
-    payload_t packet = {ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff};
-    if (radio.write(&packet, sizeof(packet)))
-    {
-    digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
+    /******************************Previous INTERVALS Definition*************************************/
+      if (presentIntervals == 0){  //If present INTERVALS is first in INTERVALS loop
+        previousIntervals = INTERVALS - 1; //position of last array element
+      }
+      else {
+        previousIntervals = presentIntervals - 1; //previous position in array
+      }
+    /******************************Change Definition*************************************/
+      if (state[presentIntervals] + state[previousIntervals] == 0){ // If 'walking' to 'walking'
+        change[presentIntervals] = -1; //walking
+        lean[presentIntervals] = 0;
+      }
+      else if (state[presentIntervals] + state[previousIntervals] == 2){ // If 'standing' to 'standing'
+        change[presentIntervals] = 0; //standing
+      }
+      else if (state[presentIntervals] - state[previousIntervals] == -1){ // If 'standing' to 'walking'
+        change[presentIntervals] = 1; //shifting
+      }
+      else if (state[presentIntervals] - state[previousIntervals] == 1){ // If 'standing' to 'walking'
+        change[presentIntervals] = 2; //settling
+      } 
+      else { // something went wrong
+        change[presentIntervals] = 0; 
+      }
+    /******************************Lean Definition*************************************/  
+      if (change[presentIntervals] >= 0){ // If standing, shifting, or settling
+        forwardCount = 0;
+        backwardCount = 0;
+        for (int i = 0; i <= SAMPLES - 1; i++){ // for all samples
+          if (pressureSamples[i] > FORWARD_THRESHOLD){ // if forward thresh crossed
+            forwardCount++; // increment forward counter
+          }
+          else if (pressureSamples[i] < BACKWARD_THRESHOLD){ // if backward thresh crossed
+            backwardCount++; // increment backward counter
+          }
+        }
+        if (forwardCount > SAMPLES/2){ // if forward for more than half of samples
+          lean[presentIntervals] = 1; // Lean defined as forward
+        }
+        else if (backwardCount > SAMPLES/2){ // if backward for more than half of samples
+          lean[presentIntervals] = -1;  // Lean defined as backward
+        }
+        else {
+          lean[presentIntervals] = 0; // Lean defined as neutral
+        }
+      }
+    /******************************Imbalance Definition*************************************/ 
+      if (change[presentIntervals] >= 0 && abs(lean[presentIntervals]) == 1){ // If [standing, shifting, or settilng] AND [leaning]
+        int threshgy = abs(g.gyro.y);
+        int threshaz = abs(a.acceleration.z);
+        for (int i = 0; i <= SAMPLES; i++) {  
+          if (threshgy[i] >= GYROSCOPE_Y_THRESHOLD || threshaz[i] >= ACCELEROMETER_Z_THRESHOLD){
+            imbalance[presentIntervals] = 1;
+          }
+          else{
+            imbalance[presentIntervals] = 0;
+          }
+        }    
+      }
+      else{
+        imbalance[presentIntervals] = 0;
+      }    
+     // a.acceleration.z;
+     // g.gyro.y;
+    /******************************Display Results*************************************/ 
+    Serial.println(g.gyro.y);
+    Serial.print(" ");
+    Serial.print(a.acceleration.z);
+    Serial.print(" ");
+    Serial.print(imbalance[presentIntervals]);
+    /******************************Present INTERVALS Definition*************************************/
+    if (presentIntervals < INTERVALS - 1){  // If length of array hasn't been reached
+      presentIntervals = presentIntervals++; // Increment INTERVALS
     }
-    else
-    {
-    digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
-    }*/
-
-  /*
-      ax = a.acceleration.x;
-      ay = a.acceleration.y;
-      az = a.acceleration.z;
-      gx = g.gyro.x;
-      gy = g.gyro.y;
-      gz = g.gyro.z;
-
-      strip.setPixelColor(0, (int)abs(gx), (int)abs(gy), (int)abs(gz));
-      strip.show();
-  */
-
-
-
-
+    else{ // If length has been reached
+      presentIntervals = 0; //Loop back to first INTERVALS
+    }
+  
 }
