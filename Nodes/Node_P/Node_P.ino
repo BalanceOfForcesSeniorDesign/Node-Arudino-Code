@@ -47,17 +47,17 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 // Walking Detection
-#define DOMINATING_FREQUENCY_FLOOR .27; // Hz
-#define DOMINATING_FREQUENCY_CEILING 5; // Hz
+#define DOMINATING_FREQUENCY_FLOOR .27 // Hz
+#define DOMINATING_FREQUENCY_CEILING 5 // Hz
 
 // Imbalance Detection
-#define FORWARD_THRESHOLD 50;
-#define BACKWARD_THRESHOLD -50;
-#define ACCELEROMETER_Z_THRESHOLD 4;
-#define GYROSCOPE_Y_THRESHOLD 12;
+#define FORWARD_THRESHOLD 50
+#define BACKWARD_THRESHOLD -50
+#define ACCELEROMETER_Z_THRESHOLD 4
+#define GYROSCOPE_Y_THRESHOLD 12
 
 
-#define INTERVALS 2;
+#define INTERVALS 2
 int presentIntervals;
 int previousIntervals;
 int forwardCount;
@@ -234,82 +234,82 @@ currentTime = micros();
 void detectImbalance()
 {
 
-    /******************************Previous INTERVALS Definition*************************************/
-      if (presentIntervals == 0){  //If present INTERVALS is first in INTERVALS loop
-        previousIntervals = INTERVALS - 1; //position of last array element
-      }
-      else {
-        previousIntervals = presentIntervals - 1; //previous position in array
-      }
-    /******************************Change Definition*************************************/
-      if (state[presentIntervals] + state[previousIntervals] == 0){ // If 'walking' to 'walking'
-        change[presentIntervals] = -1; //walking
-        lean[presentIntervals] = 0;
-      }
-      else if (state[presentIntervals] + state[previousIntervals] == 2){ // If 'standing' to 'standing'
-        change[presentIntervals] = 0; //standing
-      }
-      else if (state[presentIntervals] - state[previousIntervals] == -1){ // If 'standing' to 'walking'
-        change[presentIntervals] = 1; //shifting
-      }
-      else if (state[presentIntervals] - state[previousIntervals] == 1){ // If 'standing' to 'walking'
-        change[presentIntervals] = 2; //settling
-      } 
-      else { // something went wrong
-        change[presentIntervals] = 0; 
-      }
-    /******************************Lean Definition*************************************/  
-      if (change[presentIntervals] >= 0){ // If standing, shifting, or settling
-        forwardCount = 0;
-        backwardCount = 0;
-        for (int i = 0; i <= SAMPLES - 1; i++){ // for all samples
-          if (pressureSamples[i] > FORWARD_THRESHOLD){ // if forward thresh crossed
-            forwardCount++; // increment forward counter
-          }
-          else if (pressureSamples[i] < BACKWARD_THRESHOLD){ // if backward thresh crossed
-            backwardCount++; // increment backward counter
-          }
-        }
-        if (forwardCount > SAMPLES/2){ // if forward for more than half of samples
-          lean[presentIntervals] = 1; // Lean defined as forward
-        }
-        else if (backwardCount > SAMPLES/2){ // if backward for more than half of samples
-          lean[presentIntervals] = -1;  // Lean defined as backward
-        }
-        else {
-          lean[presentIntervals] = 0; // Lean defined as neutral
-        }
-      }
-    /******************************Imbalance Definition*************************************/ 
-      if (change[presentIntervals] >= 0 && abs(lean[presentIntervals]) == 1){ // If [standing, shifting, or settilng] AND [leaning]
-        int threshgy = abs(g.gyro.y);
-        int threshaz = abs(a.acceleration.z);
-        for (int i = 0; i <= SAMPLES; i++) {  
-          if (threshgy[i] >= GYROSCOPE_Y_THRESHOLD || threshaz[i] >= ACCELEROMETER_Z_THRESHOLD){
-            imbalance[presentIntervals] = 1;
-          }
-          else{
-            imbalance[presentIntervals] = 0;
-          }
-        }    
-      }
-      else{
-        imbalance[presentIntervals] = 0;
-      }    
-     // a.acceleration.z;
-     // g.gyro.y;
-    /******************************Display Results*************************************/ 
-    Serial.println(g.gyro.y);
-    Serial.print(" ");
-    Serial.print(a.acceleration.z);
-    Serial.print(" ");
-    Serial.print(imbalance[presentIntervals]);
-    /******************************Present INTERVALS Definition*************************************/
-    if (presentIntervals < INTERVALS - 1){  // If length of array hasn't been reached
-      presentIntervals = presentIntervals++; // Increment INTERVALS
-    }
-    else{ // If length has been reached
-      presentIntervals = 0; //Loop back to first INTERVALS
-    }
-  
+//    /******************************Previous INTERVALS Definition*************************************/
+//      if (presentIntervals == 0){  //If present INTERVALS is first in INTERVALS loop
+//        previousIntervals = INTERVALS - 1; //position of last array element
+//      }
+//      else {
+//        previousIntervals = presentIntervals - 1; //previous position in array
+//      }
+//    /******************************Change Definition*************************************/
+//      if (state[presentIntervals] + state[previousIntervals] == 0){ // If 'walking' to 'walking'
+//        change[presentIntervals] = -1; //walking
+//        lean[presentIntervals] = 0;
+//      }
+//      else if (state[presentIntervals] + state[previousIntervals] == 2){ // If 'standing' to 'standing'
+//        change[presentIntervals] = 0; //standing
+//      }
+//      else if (state[presentIntervals] - state[previousIntervals] == -1){ // If 'standing' to 'walking'
+//        change[presentIntervals] = 1; //shifting
+//      }
+//      else if (state[presentIntervals] - state[previousIntervals] == 1){ // If 'standing' to 'walking'
+//        change[presentIntervals] = 2; //settling
+//      } 
+//      else { // something went wrong
+//        change[presentIntervals] = 0; 
+//      }
+//    /******************************Lean Definition*************************************/  
+//      if (change[presentIntervals] >= 0){ // If standing, shifting, or settling
+//        forwardCount = 0;
+//        backwardCount = 0;
+//        for (int i = 0; i <= SAMPLES - 1; i++){ // for all samples
+//          if (pressureSamples[i] > FORWARD_THRESHOLD){ // if forward thresh crossed
+//            forwardCount++; // increment forward counter
+//          }
+//          else if (pressureSamples[i] < BACKWARD_THRESHOLD){ // if backward thresh crossed
+//            backwardCount++; // increment backward counter
+//          }
+//        }
+//        if (forwardCount > SAMPLES/2){ // if forward for more than half of samples
+//          lean[presentIntervals] = 1; // Lean defined as forward
+//        }
+//        else if (backwardCount > SAMPLES/2){ // if backward for more than half of samples
+//          lean[presentIntervals] = -1;  // Lean defined as backward
+//        }
+//        else {
+//          lean[presentIntervals] = 0; // Lean defined as neutral
+//        }
+//      }
+//    /******************************Imbalance Definition*************************************/ 
+//      if (change[presentIntervals] >= 0 && abs(lean[presentIntervals]) == 1){ // If [standing, shifting, or settilng] AND [leaning]
+//        int threshgy = abs(g.gyro.y);
+//        int threshaz = abs(a.acceleration.z);
+//        for (int i = 0; i <= SAMPLES; i++) {  
+//          if (threshgy[i] >= GYROSCOPE_Y_THRESHOLD || threshaz[i] >= ACCELEROMETER_Z_THRESHOLD){
+//            imbalance[presentIntervals] = 1;
+//          }
+//          else{
+//            imbalance[presentIntervals] = 0;
+//          }
+//        }    
+//      }
+//      else{
+//        imbalance[presentIntervals] = 0;
+//      }    
+//     // a.acceleration.z;
+//     // g.gyro.y;
+//    /******************************Display Results*************************************/ 
+//    Serial.println(g.gyro.y);
+//    Serial.print(" ");
+//    Serial.print(a.acceleration.z);
+//    Serial.print(" ");
+//    Serial.print(imbalance[presentIntervals]);
+//    /******************************Present INTERVALS Definition*************************************/
+//    if (presentIntervals < INTERVALS - 1){  // If length of array hasn't been reached
+//      presentIntervals = presentIntervals++; // Increment INTERVALS
+//    }
+//    else{ // If length has been reached
+//      presentIntervals = 0; //Loop back to first INTERVALS
+//    }
+
 }
