@@ -53,8 +53,23 @@ arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPL
 // Imbalance Detection
 #define FORWARD_THRESHOLD 50
 #define BACKWARD_THRESHOLD -50
+#define PRESSURE_SAMPLE_CHECK 4
+
 #define ACCELEROMETER_Z_THRESHOLD 4
 #define GYROSCOPE_Y_THRESHOLD 12
+#define IMU_SAMPLE_CHECK 4
+
+#define FORWARD_LEAN 1
+#define BACKWARD_LEAN -1
+#define NEUTRAL_LEAN 0
+
+#define CURRENTLY_WALKING 0
+#define CURRENTLY_NOT_WALKING 1
+
+#define WALKING -1
+#define STANDING 0
+#define SHIFTING 1
+#define SETTLING 2
 
 int forwardCount;
 int backwardCount;
@@ -204,6 +219,7 @@ currentTime = micros();
 /******************************Take the FFT every defined number samples*************************************/
   if (numSamplesCollected  >= 4)
   {
+    numSamplesCollected  = 0;
 
     for (int i = 0; i <= SAMPLES - 1; i++)
     {
@@ -216,17 +232,17 @@ currentTime = micros();
     PressureFFT.Compute(FFT_FORWARD);
     PressureFFT.ComplexToMagnitude();
 
-    // Computing the dominating frequency and if it is not defined as walking then detect imbalance
+    // Computing the dominating frequency and if it is not defined as walking
     double domFrequency = PressureFFT.MajorPeak();
     if (!(domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING)){
-      presentState = 1; // User is walking
-      detectImbalance();
+      presentState = CURRENTLY_NOT_WALKING; // User is not walking
     }
     else{
-      presentState = 0; // User is not walking
+      presentState = CURRENTLY_WALKING; // User is walking
     }
-    numSamplesCollected  = 0;
-    /******************************Previous State Definition*************************************/
+
+    detectImbalance();
+
     previousState = presentState;  
   }
 
@@ -237,27 +253,32 @@ void detectImbalance()
 {
 
     /******************************Change Definition*************************************/
-      if (presentState + previousState == 0){ // If 'walking' to 'walking'
-        change = -1; //walking
-        lean = 0;
+      if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_WALKING){ // If 'walking' to 'walking'
+        change = WALKING; //walking
+        lean = NEUTRAL_LEAN;
+        Serial.println("Walking");
       }
-      else if (presentState + previousState == 2){ // If 'standing' to 'standing'
-        change = 0; //standing
+      else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'standing' to 'standing'
+        change = STANDING; //standing
+        Serial.println("Standing");
       }
-      else if (presentState - previousState == -1){ // If 'standing' to 'walking'
-        change = 1; //shifting
+      else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_WALKING){ // If 'standing' to 'walking'
+        change = SHIFTING; //shifting
+        Serial.println("Shifting");
       }
-      else if (presentState - previousState == 1){ // If 'walking' to 'standing'
-        change = 2; //settling
+      else if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'walking' to 'standing'
+        change = SETTLING; //settling
+        Serial.println("Settling");
       } 
       else { // something went wrong
-        change = 0; 
+        change = STANDING;
+        Serial.println("Standing"); 
       }
     /******************************Lean Definition*************************************/  
       if (change >= 0){ // If standing, shifting, or settling
         forwardCount = 0;
         backwardCount = 0;
-        for (int i = SAMPLES; i < SAMPLES - 4; i--){ // for all samples
+        for (int i = SAMPLES; i >= SAMPLES - (PRESSURE_SAMPLE_CHECK + 1); i--){ // for last 4 samples
           if (pressureSamples[i] > FORWARD_THRESHOLD){ // if forward thresh crossed
             forwardCount++; // increment forward counter
           }
@@ -265,21 +286,25 @@ void detectImbalance()
             backwardCount++; // increment backward counter
           }
         }
-        if (forwardCount > SAMPLES/2){ // if forward for more than half of samples
-          lean = 1; // Lean defined as forward
+        if (forwardCount > PRESSURE_SAMPLE_CHECK/2){ // if forward for more than half of samples
+          lean = FORWARD_LEAN; // Lean defined as forward
+          Serial.println("Forward Lean");
         }
-        else if (backwardCount > SAMPLES/2){ // if backward for more than half of samples
-          lean = -1;  // Lean defined as backward
+        else if (backwardCount > PRESSURE_SAMPLE_CHECK/2){ // if backward for more than half of samples
+          lean = BACKWARD_LEAN;  // Lean defined as backward
+          Serial.println("Backward Lean");
         }
         else {
-          lean = 0; // Lean defined as neutral
+          lean = NEUTRAL_LEAN; // Lean defined as neutral
+          Serial.println("Neutral Lean");
         }
       }
     /******************************Imbalance Definition*************************************/ 
       if (change >= 0 && abs(lean) == 1){ // If [standing, shifting, or settilng] AND [leaning]
-        for (int i = SAMPLES; i < SAMPLES - 4; i--) {  
+        for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
           if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
             imbalance = 1;
+            Serial.println("Detected Imbalance");
           }
           else{
             imbalance = 0;
@@ -295,4 +320,9 @@ void detectImbalance()
 //    Serial.print(accelerometerZSamples);
 //    Serial.print(" ");
 //    Serial.print(imbalance);
+}
+
+void checkBuzzer()
+{
+
 }
