@@ -47,7 +47,7 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 // Walking Detection
-#define DOMINATING_FREQUENCY_FLOOR .27 // Hz
+#define DOMINATING_FREQUENCY_FLOOR 1 // Hz
 #define DOMINATING_FREQUENCY_CEILING 5 // Hz
 
 // Imbalance Detection
@@ -234,11 +234,16 @@ currentTime = micros();
 
     // Computing the dominating frequency and if it is not defined as walking
     double domFrequency = PressureFFT.MajorPeak();
-    if (!(domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING)){
-      presentState = CURRENTLY_NOT_WALKING; // User is not walking
+    if (domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING){
+      presentState = CURRENTLY_WALKING; // User is walking
+      Serial.print("Detected walking at a frequency of ");
+      Serial.println(domFrequency);
+
     }
     else{
-      presentState = CURRENTLY_WALKING; // User is walking
+      Serial.print("Detected not walking at a frequency of ");
+      Serial.println(domFrequency);
+      presentState = CURRENTLY_NOT_WALKING; // User is not walking
     }
 
     detectImbalance();
