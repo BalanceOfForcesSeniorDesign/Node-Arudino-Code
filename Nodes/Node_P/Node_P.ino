@@ -47,8 +47,9 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 // Walking Detection
-#define DOMINATING_FREQUENCY_FLOOR 1 // Hz
-#define DOMINATING_FREQUENCY_CEILING 5 // Hz
+#define DOMINATING_FREQUENCY_FLOOR 60 // Hz
+#define DOMINATING_FREQUENCY_CEILING 300 // Hz
+double domFrequency;
 
 // Imbalance Detection
 #define FORWARD_THRESHOLD 50
@@ -212,6 +213,13 @@ currentTime = micros();
       accelerometerZSamples[SAMPLES - 1] = (float) accelerometerZSamples[SAMPLES - 2] + interpolatedSlope * 4;
 
       interpolatedSample = true;
+
+      /*Serial.print(pressureSamples[SAMPLES-1]);
+      Serial.print(",");
+      Serial.print(gyroscopeYSamples[SAMPLES - 1]);
+      Serial.print(",");
+      Serial.println(accelerometerZSamples[SAMPLES - 1]);*/
+      
     }
   }
 
@@ -232,17 +240,35 @@ currentTime = micros();
     PressureFFT.Compute(FFT_FORWARD);
     PressureFFT.ComplexToMagnitude();
 
+
+ double previousFrequency = domFrequency; 
+ domFrequency = (vPressureReal[3]+vPressureReal[4]+vPressureReal[5]+vPressureReal[6]+vPressureReal[7]+vPressureReal[8])/6;
+ domFrequency = previousFrequency + .4*(domFrequency-previousFrequency);
+ 
+ /* Serial.print(",");
+    Serial.print(vPressureReal[3]);
+  Serial.print(",");
+    Serial.print(vPressureReal[4]);
+  Serial.print(",");
+    Serial.print(vPressureReal[5]);
+  Serial.print(",");
+    Serial.print(vPressureReal[6]);
+  Serial.print(",");
+    Serial.print(vPressureReal[7]);
+  Serial.println();*/
+//Serial.println(domFrequency);
     // Computing the dominating frequency and if it is not defined as walking
-    double domFrequency = PressureFFT.MajorPeak();
+   // double domFrequency = PressureFFT.MajorPeak();
+    //Serial.println(domFrequency);
     if (domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING){
       presentState = CURRENTLY_WALKING; // User is walking
-      Serial.print("Detected walking at a frequency of ");
-      Serial.println(domFrequency);
+      Serial.println("Detected walking");
+      
 
     }
     else{
-      Serial.print("Detected not walking at a frequency of ");
-      Serial.println(domFrequency);
+      //Serial.print("Detected not walking at a frequency of ");
+      //Serial.println(domFrequency);
       presentState = CURRENTLY_NOT_WALKING; // User is not walking
     }
 
@@ -261,23 +287,23 @@ void detectImbalance()
       if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_WALKING){ // If 'walking' to 'walking'
         change = WALKING; //walking
         lean = NEUTRAL_LEAN;
-        Serial.println("Walking");
+      //  Serial.println("Walking");
       }
       else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'standing' to 'standing'
         change = STANDING; //standing
-        Serial.println("Standing");
+      //  Serial.println("Standing");
       }
       else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_WALKING){ // If 'standing' to 'walking'
         change = SHIFTING; //shifting
-        Serial.println("Shifting");
+      //  Serial.println("Shifting");
       }
       else if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'walking' to 'standing'
         change = SETTLING; //settling
-        Serial.println("Settling");
+      //  Serial.println("Settling");
       } 
       else { // something went wrong
         change = STANDING;
-        Serial.println("Standing"); 
+      //  Serial.println("Standing"); 
       }
     /******************************Lean Definition*************************************/  
       if (change >= 0){ // If standing, shifting, or settling
@@ -293,18 +319,19 @@ void detectImbalance()
         }
         if (forwardCount > PRESSURE_SAMPLE_CHECK/2){ // if forward for more than half of samples
           lean = FORWARD_LEAN; // Lean defined as forward
-          Serial.println("Forward Lean");
+        //  Serial.println("Forward Lean");
         }
         else if (backwardCount > PRESSURE_SAMPLE_CHECK/2){ // if backward for more than half of samples
           lean = BACKWARD_LEAN;  // Lean defined as backward
-          Serial.println("Backward Lean");
+        //  Serial.println("Backward Lean");
         }
         else {
           lean = NEUTRAL_LEAN; // Lean defined as neutral
-          Serial.println("Neutral Lean");
+         // Serial.println("Neutral Lean");
         }
       }
     /******************************Imbalance Definition*************************************/ 
+    
       if (change >= 0 && abs(lean) == 1){ // If [standing, shifting, or settilng] AND [leaning]
         for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
           if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
