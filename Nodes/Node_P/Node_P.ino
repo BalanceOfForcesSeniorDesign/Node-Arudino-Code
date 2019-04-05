@@ -15,6 +15,8 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 #define PIN 8
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(1, PIN, NEO_GRB + NEO_KHZ800);
 
+#define BUZZER_PIN 12
+#define LED_PIN 13
 
 // Radio Pins
 #define CSN_PIN 11
@@ -46,20 +48,23 @@ double interpolatedSlope;
 
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
-// Walking Detection
-#define DOMINATING_FREQUENCY_FLOOR 60 // Hz
+/****** Walking Detection Tunes ********/
+#define DOMINATING_FREQUENCY_FLOOR 55 // Hz
 #define DOMINATING_FREQUENCY_CEILING 300 // Hz
-double domFrequency;
+#define WALKING_BIAS .1
 
-// Imbalance Detection
-#define FORWARD_THRESHOLD 50
+/******* Imbalance Detection Tunes ********/
+#define STAND_COUNT 150 //150*4ms = 600 ms standing
+#define PRESSURE_SAMPLE_CHECK 4 // How many pressure sensor samples do we check?
+#define IMU_SAMPLE_CHECK 4 // How many IMU sensor samples do we check?
+
+#define FORWARD_THRESHOLD 15
 #define BACKWARD_THRESHOLD -50
-#define PRESSURE_SAMPLE_CHECK 4
 
-#define ACCELEROMETER_Z_THRESHOLD 4
-#define GYROSCOPE_Y_THRESHOLD 12
-#define IMU_SAMPLE_CHECK 4
+#define ACCELEROMETER_Z_THRESHOLD 4 // m/s^2
+#define GYROSCOPE_Y_THRESHOLD 12 // dps
 
+// Tag Definitions
 #define FORWARD_LEAN 1
 #define BACKWARD_LEAN -1
 #define NEUTRAL_LEAN 0
@@ -72,6 +77,8 @@ double domFrequency;
 #define SHIFTING 1
 #define SETTLING 2
 
+// Global Counters
+int standingCounter = STAND_COUNT;
 int forwardCount;
 int backwardCount;
 int presentState = 0;
@@ -79,8 +86,9 @@ int previousState = 0;
 int change; //Change from one state to another (-1 .. 2)
 int lean; // Direction of lean (-1..1)
 int imbalance; //Imbalance decision (0 or 1)
+double domFrequency;
 
-// Sensor global variables
+// Sensor Global Variables
 sensors_event_t a, m, g, temp;
 float ax, ay, az, gx, gy, gz;
 int nodeA_diff, nodeB_diff;
@@ -129,14 +137,13 @@ void setup(void)
   strip.setBrightness(64);
   strip.show();
 
-  pinMode(13, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT); // Buzzer Pin
+  pinMode(LED_PIN, OUTPUT);
   setupRadio(radio);
   radio.stopListening(); // Needed for a write only operation
 }
 
 void loop(void) {
-
-
 
 currentTime = micros();
 
@@ -241,34 +248,15 @@ currentTime = micros();
     PressureFFT.ComplexToMagnitude();
 
 
- double previousFrequency = domFrequency; 
- domFrequency = (vPressureReal[3]+vPressureReal[4]+vPressureReal[5]+vPressureReal[6]+vPressureReal[7]+vPressureReal[8])/6;
- domFrequency = previousFrequency + .4*(domFrequency-previousFrequency);
- 
- /* Serial.print(",");
-    Serial.print(vPressureReal[3]);
-  Serial.print(",");
-    Serial.print(vPressureReal[4]);
-  Serial.print(",");
-    Serial.print(vPressureReal[5]);
-  Serial.print(",");
-    Serial.print(vPressureReal[6]);
-  Serial.print(",");
-    Serial.print(vPressureReal[7]);
-  Serial.println();*/
-//Serial.println(domFrequency);
-    // Computing the dominating frequency and if it is not defined as walking
-   // double domFrequency = PressureFFT.MajorPeak();
-    //Serial.println(domFrequency);
+    double previousFrequency = domFrequency; 
+    domFrequency = (vPressureReal[3]+vPressureReal[4]+vPressureReal[5]+vPressureReal[6]+vPressureReal[7]+vPressureReal[8])/6;
+    domFrequency = previousFrequency + WALKING_BIAS*(domFrequency-previousFrequency);
+
     if (domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING){
       presentState = CURRENTLY_WALKING; // User is walking
       Serial.println("Detected walking");
-      
-
     }
     else{
-      //Serial.print("Detected not walking at a frequency of ");
-      //Serial.println(domFrequency);
       presentState = CURRENTLY_NOT_WALKING; // User is not walking
     }
 
@@ -284,29 +272,16 @@ void detectImbalance()
 {
 
     /******************************Change Definition*************************************/
-      if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_WALKING){ // If 'walking' to 'walking'
-        change = WALKING; //walking
-        lean = NEUTRAL_LEAN;
-      //  Serial.println("Walking");
-      }
-      else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'standing' to 'standing'
-        change = STANDING; //standing
-      //  Serial.println("Standing");
-      }
-      else if (previousState == CURRENTLY_NOT_WALKING && presentState == CURRENTLY_WALKING){ // If 'standing' to 'walking'
-        change = SHIFTING; //shifting
-      //  Serial.println("Shifting");
-      }
-      else if (previousState == CURRENTLY_WALKING && presentState == CURRENTLY_NOT_WALKING){ // If 'walking' to 'standing'
-        change = SETTLING; //settling
-      //  Serial.println("Settling");
-      } 
-      else { // something went wrong
-        change = STANDING;
-      //  Serial.println("Standing"); 
-      }
+    if (presentState == CURRENTLY_WALKING){ // User is walking
+      standingCounter = STAND_COUNT; // Reset standing timer
+      change = WALKING; 
+    }
+    else{
+      standingCounter--;
+      change = STANDING;  
+    }
     /******************************Lean Definition*************************************/  
-      if (change >= 0){ // If standing, shifting, or settling
+      if (change == STANDING){ // If standing
         forwardCount = 0;
         backwardCount = 0;
         for (int i = SAMPLES; i >= SAMPLES - (PRESSURE_SAMPLE_CHECK + 1); i--){ // for last 4 samples
@@ -319,24 +294,24 @@ void detectImbalance()
         }
         if (forwardCount > PRESSURE_SAMPLE_CHECK/2){ // if forward for more than half of samples
           lean = FORWARD_LEAN; // Lean defined as forward
-        //  Serial.println("Forward Lean");
         }
         else if (backwardCount > PRESSURE_SAMPLE_CHECK/2){ // if backward for more than half of samples
           lean = BACKWARD_LEAN;  // Lean defined as backward
-        //  Serial.println("Backward Lean");
         }
         else {
           lean = NEUTRAL_LEAN; // Lean defined as neutral
-         // Serial.println("Neutral Lean");
         }
       }
     /******************************Imbalance Definition*************************************/ 
+
     
-      if (change >= 0 && abs(lean) == 1){ // If [standing, shifting, or settilng] AND [leaning]
+      if (change == STANDING && (lean == FORWARD_LEAN || lean == BACKWARD_LEAN)){ // If standing and leaning
         for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
           if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
             imbalance = 1;
             Serial.println("Detected Imbalance");
+            strip.setPixelColor(0, 255, 0, 0);
+            strip.show();
           }
           else{
             imbalance = 0;
@@ -345,16 +320,23 @@ void detectImbalance()
       }
       else{
         imbalance = 0;
+        strip.setPixelColor(0, 0, 255, 0);
+        strip.show();
       }    
-    /******************************Display Results*************************************/ 
-//    Serial.println(gyroscopeYSamples);
-//    Serial.print(" ");
-//    Serial.print(accelerometerZSamples);
-//    Serial.print(" ");
-//    Serial.print(imbalance);
 }
 
-void checkBuzzer()
+void sendMessage()
 {
-
+// Send message to PC reciever
+    Serial.println("Sending message....");
+    openRadioToNode(3, radio); // Switch to transmit to the PC node
+    payload_t packet = {ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff};
+    if (radio.write(&packet, sizeof(packet)))
+    {
+      digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
+    }
+    else
+    {
+      digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
+    }
 }
