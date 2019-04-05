@@ -15,6 +15,8 @@ struct payload_t {                 // Structure of our payload
 
 float acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z,nodeA_diff,nodeB_diff;
 
+char recieveMessage[32] = "";
+
 unsigned long current_time;
 void setup(void)
 {
@@ -24,25 +26,27 @@ void setup(void)
 
 void loop(void){
   
-  time = millis();
+  //time = millis();
   
   while ( radio.available() ) {     // Is there anything ready for us?
-    payload_t payload;
-    radio.read(&payload,sizeof(payload));
+
+    radio.read(&recieveMessage,sizeof(recieveMessage));
     
-    acc_x = payload.ax;
+    /*acc_x = payload.ax;
     acc_y = payload.ay;
     acc_z = payload.az;
     gyro_x = payload.gx;
     gyro_y = payload.gy;
     gyro_z = payload.gz;
     nodeA_diff = payload.nodeA_diff;
-    nodeB_diff = payload.nodeB_diff;
+    nodeB_diff = payload.nodeB_diff;*/
+
+    Serial.println(recieveMessage);
 
 
   }
 
-    Serial.print(time);
+    /*Serial.print(time);
     Serial.print(",");
     Serial.print(acc_x);
     Serial.print(",");
@@ -59,5 +63,5 @@ void loop(void){
     Serial.print(nodeA_diff);
     Serial.print(",");
     Serial.print(nodeB_diff);
-    Serial.println();
+    Serial.println();*/
 }

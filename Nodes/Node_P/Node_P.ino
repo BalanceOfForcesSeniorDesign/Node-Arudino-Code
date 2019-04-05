@@ -7,6 +7,7 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <arduinoFFT.h>
+#include <string.h>
 
 // i2c
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
@@ -49,19 +50,19 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 /****** Walking Detection Tunes ********/
-#define DOMINATING_FREQUENCY_FLOOR 55 // Hz
+#define DOMINATING_FREQUENCY_FLOOR 40 // Hz
 #define DOMINATING_FREQUENCY_CEILING 300 // Hz
-#define WALKING_BIAS .1
+#define WALKING_BIAS .15
 
 /******* Imbalance Detection Tunes ********/
-#define STAND_COUNT 150 //150*4ms = 600 ms standing
+#define STAND_COUNT 150 //200*4ms = 800 ms standing
 #define PRESSURE_SAMPLE_CHECK 4 // How many pressure sensor samples do we check?
 #define IMU_SAMPLE_CHECK 4 // How many IMU sensor samples do we check?
 
-#define FORWARD_THRESHOLD 15
+#define FORWARD_THRESHOLD 20
 #define BACKWARD_THRESHOLD -50
 
-#define ACCELEROMETER_Z_THRESHOLD 4 // m/s^2
+#define ACCELEROMETER_Z_THRESHOLD 90 // m/s^2
 #define GYROSCOPE_Y_THRESHOLD 12 // dps
 
 // Tag Definitions
@@ -87,6 +88,7 @@ int change; //Change from one state to another (-1 .. 2)
 int lean; // Direction of lean (-1..1)
 int imbalance; //Imbalance decision (0 or 1)
 double domFrequency;
+
 
 // Sensor Global Variables
 sensors_event_t a, m, g, temp;
@@ -254,7 +256,9 @@ currentTime = micros();
 
     if (domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING){
       presentState = CURRENTLY_WALKING; // User is walking
-      Serial.println("Detected walking");
+      
+      sendMessage("Detected Walking");
+      
     }
     else{
       presentState = CURRENTLY_NOT_WALKING; // User is not walking
@@ -309,7 +313,8 @@ void detectImbalance()
         for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
           if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
             imbalance = 1;
-            Serial.println("Detected Imbalance");
+            sendMessage("Detected Imbalance");
+            
             strip.setPixelColor(0, 255, 0, 0);
             strip.show();
           }
@@ -325,13 +330,35 @@ void detectImbalance()
       }    
 }
 
-void sendMessage()
+void sendMessage(String message)
 {
-// Send message to PC reciever
-    Serial.println("Sending message....");
+    // Send message to PC reciever
     openRadioToNode(3, radio); // Switch to transmit to the PC node
-    payload_t packet = {ax, ay, az, gx, gy, gz, nodeA_diff, nodeB_diff};
-    if (radio.write(&packet, sizeof(packet)))
+
+    Serial.println(message);
+    char messageSend[32];
+
+    int messageSize;
+
+    while (message[messageSize] != 0x00)
+    {
+      messageSize++;
+    }
+
+    
+    for (int i = 0; i<31; i++)
+    {
+      if (i > messageSize-1)
+      {
+        messageSend[i] = ' ';
+      }
+      else
+      {
+        messageSend[i] = message[i];
+      }
+    }
+    
+    if (radio.write(&messageSend, sizeof(messageSend)))
     {
       digitalWrite(13, HIGH);    // turn the LED on by making the voltage HIGH
     }
