@@ -319,7 +319,7 @@ void detectImbalance()
 //      }
     /******************************Lean Definition*************************************/  
 //      if (change >= 0){ // If standing, shifting, or settling
-        if (standingCounter == 0)
+        if (standingCounter == 0){
         forwardCount = 0;
         backwardCount = 0;
         for (int i = SAMPLES; i >= SAMPLES - (PRESSURE_SAMPLE_CHECK + 1); i--){ // for last 4 samples
@@ -345,7 +345,8 @@ void detectImbalance()
       }
     /******************************Imbalance Definition*************************************/ 
     
-      if (change >= 0 && abs(lean) == 1){ // If [standing, shifting, or settilng] AND [leaning]
+//      if (change >= 0 && abs(lean) == 1){ // If [standing, shifting, or settilng] AND [leaning] 
+        if (standingCounter == 0 && abs(lean) == 1){
         for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
           if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
             imbalance = 1;
