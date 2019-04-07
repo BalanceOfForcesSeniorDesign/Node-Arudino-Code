@@ -50,20 +50,25 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 /****** Walking Detection Tunes ********/
-#define DOMINATING_FREQUENCY_FLOOR 40 // Hz
-#define DOMINATING_FREQUENCY_CEILING 300 // Hz
-#define WALKING_BIAS .15
+#define DOMINATING_FREQUENCY_FLOOR 44
+#define DOMINATING_FREQUENCY_CEILING 300 
+#define WALKING_BIAS .13
 
 /******* Imbalance Detection Tunes ********/
-#define STAND_COUNT 150 //200*4ms = 800 ms standing
+#define STAND_COUNT 200 //200*4ms = 800 ms standing
 #define PRESSURE_SAMPLE_CHECK 4 // How many pressure sensor samples do we check?
 #define IMU_SAMPLE_CHECK 4 // How many IMU sensor samples do we check?
 
-#define FORWARD_THRESHOLD 20
+#define FORWARD_THRESHOLD 50
 #define BACKWARD_THRESHOLD -50
 
 #define ACCELEROMETER_Z_THRESHOLD 90 // m/s^2
 #define GYROSCOPE_Y_THRESHOLD 12 // dps
+
+#define LEFT_FOOT_BACKWARD -20
+#define LEFT_FOOT_FORWARD 20
+#define RIGHT_FOOT_BACKWARD -20
+#define RIGHT_FOOT_FORWARD 20
 
 // Tag Definitions
 #define FORWARD_LEAN 1
@@ -84,6 +89,7 @@ int forwardCount;
 int backwardCount;
 int presentState = 0;
 int previousState = 0;
+bool firstStep = true;
 int change; //Change from one state to another (-1 .. 2)
 int lean; // Direction of lean (-1..1)
 int imbalance; //Imbalance decision (0 or 1)
@@ -223,8 +229,11 @@ currentTime = micros();
 
       interpolatedSample = true;
 
-      /*Serial.print(pressureSamples[SAMPLES-1]);
-      Serial.print(",");
+      Serial.println(pressureSamples[SAMPLES-1]);
+      //Serial.print(nodeA_diff);
+      //Serial.print(",");
+      //Serial.println(nodeB_diff);
+      /*Serial.print(",");
       Serial.print(gyroscopeYSamples[SAMPLES - 1]);
       Serial.print(",");
       Serial.println(accelerometerZSamples[SAMPLES - 1]);*/
@@ -251,17 +260,21 @@ currentTime = micros();
 
 
     double previousFrequency = domFrequency; 
-    domFrequency = (vPressureReal[3]+vPressureReal[4]+vPressureReal[5]+vPressureReal[6]+vPressureReal[7]+vPressureReal[8])/6;
+    domFrequency = (vPressureReal[4]+vPressureReal[5]+vPressureReal[6]+vPressureReal[7]+vPressureReal[8]+vPressureReal[9])/6;
     domFrequency = previousFrequency + WALKING_BIAS*(domFrequency-previousFrequency);
+
+    //Serial.println(domFrequency);
 
     if (domFrequency > DOMINATING_FREQUENCY_FLOOR && domFrequency < DOMINATING_FREQUENCY_CEILING){
       presentState = CURRENTLY_WALKING; // User is walking
-      
       sendMessage("Detected Walking");
+      strip.setPixelColor(0, 0, 0, 255);
+      strip.show();
       
     }
     else{
       presentState = CURRENTLY_NOT_WALKING; // User is not walking
+
     }
 
     detectImbalance();
@@ -298,12 +311,26 @@ void detectImbalance()
         }
         if (forwardCount > PRESSURE_SAMPLE_CHECK/2){ // if forward for more than half of samples
           lean = FORWARD_LEAN; // Lean defined as forward
+          
+          sendMessage("Forward lean");
+          
+          strip.setPixelColor(0, 255, 255, 0);
+          strip.show();
         }
         else if (backwardCount > PRESSURE_SAMPLE_CHECK/2){ // if backward for more than half of samples
           lean = BACKWARD_LEAN;  // Lean defined as backward
+          
+          sendMessage("Backward lean");
+          
+          strip.setPixelColor(0, 255, 255, 0);
+          strip.show();
         }
         else {
           lean = NEUTRAL_LEAN; // Lean defined as neutral
+
+          sendMessage("Neutral lean");
+          strip.setPixelColor(0, 0, 255, 0);
+          strip.show();
         }
       }
     /******************************Imbalance Definition*************************************/ 
@@ -311,22 +338,18 @@ void detectImbalance()
     
       if (change == STANDING && (lean == FORWARD_LEAN || lean == BACKWARD_LEAN)){ // If standing and leaning
         for (int i = SAMPLES; i >= SAMPLES - (IMU_SAMPLE_CHECK + 1); i--) {  
-          if (abs(gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD){
-            imbalance = 1;
+          if (abs((gyroscopeYSamples[i]) >= GYROSCOPE_Y_THRESHOLD || abs(accelerometerZSamples[i]) >= ACCELEROMETER_Z_THRESHOLD)){
             sendMessage("Detected Imbalance");
+
+            digitalWrite(BUZZER_PIN, HIGH);
             
             strip.setPixelColor(0, 255, 0, 0);
             strip.show();
           }
-          else{
-            imbalance = 0;
-          }
         }    
       }
       else{
-        imbalance = 0;
-        strip.setPixelColor(0, 0, 255, 0);
-        strip.show();
+        digitalWrite(BUZZER_PIN, LOW);
       }    
 }
 
