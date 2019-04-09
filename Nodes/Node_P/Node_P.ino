@@ -50,16 +50,16 @@ double interpolatedSlope;
 arduinoFFT PressureFFT = arduinoFFT(vPressureReal, vPressureImag, SAMPLES, SAMPLING_FREQUENCY);
 
 /****** Walking Detection Tunes ********/
-#define DOMINATING_FREQUENCY_FLOOR 44
+#define DOMINATING_FREQUENCY_FLOOR 40
 #define DOMINATING_FREQUENCY_CEILING 300 
-#define WALKING_BIAS .13
+#define WALKING_BIAS .12
 
 /******* Imbalance Detection Tunes ********/
-#define STAND_COUNT 200 //200*4ms = 800 ms standing
+#define STAND_COUNT 210 //200*4ms = 800 ms standing
 #define PRESSURE_SAMPLE_CHECK 4 // How many pressure sensor samples do we check?
 #define IMU_SAMPLE_CHECK 4 // How many IMU sensor samples do we check?
 
-#define FORWARD_THRESHOLD 50
+#define FORWARD_THRESHOLD 30
 #define BACKWARD_THRESHOLD -50
 
 #define ACCELEROMETER_Z_THRESHOLD 90 // m/s^2
